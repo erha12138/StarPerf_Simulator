@@ -14,6 +14,10 @@ import numpy as np
 def get_h5file_satellite_delay_data():
     # read the delay matrix data in the h5 file
     with h5py.File('data/XML_constellation/Starlink.h5', 'r') as file:
+        for key in file.keys():
+            print("key:", key)
+
+
         # access the existing first-level subgroup delay group
         delay = file['delay']
         # access the existing secondary subgroup 'shell'+str(count) subgroup

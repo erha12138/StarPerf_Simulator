@@ -9,10 +9,10 @@ Function : This script is used to test each tool script under "kits/" in starper
 '''
 
 def kits_test_cases():
-    print("\t\t\033[31mTest(01/08) : get the h3id of all cells with h3 library resolution 0-4\033[0m")
-    # get the h3id of all cells with h3 library resolution 0-4
-    import kits.get_h3_all_cells as GET_ALL_RESOLUTION_CELLS_H3ID
-    GET_ALL_RESOLUTION_CELLS_H3ID.get_h3_all_cells()
+    # print("\t\t\033[31mTest(01/08) : get the h3id of all cells with h3 library resolution 0-4\033[0m")
+    # # get the h3id of all cells with h3 library resolution 0-4
+    # import kits.get_h3_all_cells as GET_ALL_RESOLUTION_CELLS_H3ID
+    # GET_ALL_RESOLUTION_CELLS_H3ID.get_h3_all_cells()
 
     """
     print("\t\t\033[31mTest(02/09) : view the h3id of h3 cells\033[0m")

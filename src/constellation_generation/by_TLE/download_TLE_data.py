@@ -52,7 +52,18 @@ import os
 import h5py
 from datetime import datetime
 import json
+import requests
 
+# 定义代理服务器
+proxies = {
+    'http': None,
+    'https': None,
+}
+
+# proxies = {
+#     "https": "https://127.0.0.1:7890",
+#     "http": "http://172.0.0.1:7890",
+# }
 
 # download the current day's TLE data from the CelesTrak website
 def download_TLE_data(constellation_name):
@@ -66,7 +77,9 @@ def download_TLE_data(constellation_name):
     url2 = "https://celestrak.org/NORAD/elements/gp.php?GROUP=" + constellation_name + "&FORMAT=json"
     try:
         # send HTTP GET request
-        response1 = requests.get(url1)
+        # response1 = requests.get(url1)
+        response1 = requests.get(url1, proxies=proxies)
+
         # check if the request was successful
         response1.raise_for_status()
         # get web page TLE data and split the str by '\n'
@@ -74,7 +87,9 @@ def download_TLE_data(constellation_name):
         # delete the last row because it is a blank row with no data
         TLE.pop()
 
-        response2 = requests.get(url2)
+        # response2 = requests.get(url2)
+        response2 = requests.get(url2, proxies=proxies)
+
         if response2.status_code == 200:
             json_TLE = response2.json()
             # convert each JSON object to a string

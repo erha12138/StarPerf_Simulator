@@ -24,7 +24,9 @@ def constellation_configuration(dT , constellation_name):
     DOWNLOAD_TLE_DATA.download_TLE_data(constellation_name)
     # establish the correspondence between satellites and shells
     shells = SATELLITE_TO_SHELL_MAPPING.satellite_to_shell_mapping(constellation_name)
+
     # establish the correspondence between satellites and orbits
+
     SATELLITE_TO_ORBIT_MAPPING.satellite_to_orbit_mapping(shells)
 
     # at this point in execution, the mapping relationship between shell, orbit and satellite has been established in

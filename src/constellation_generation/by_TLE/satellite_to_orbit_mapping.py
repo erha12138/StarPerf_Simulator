@@ -26,6 +26,9 @@ import matplotlib.pyplot as plt
 # after the function is executed, the mapping relationship between satellite, orbit, and shell has been established
 # without any return value.
 def satellite_to_orbit_mapping(shells):
+    
+    print(len(shells))
+
     for sh in shells:
         # extract the raan of all satellites in sh
         raans = []

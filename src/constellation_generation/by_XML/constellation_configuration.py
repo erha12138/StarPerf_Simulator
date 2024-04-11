@@ -41,7 +41,7 @@ def read_xml_file(file_path):
 
 
 # Parameters:
-# dT : the timeslot, and the timeslot t is calculated from 1
+# dT : the Timeslot, and the timeslot t is calculated from 1
 # constellation_name : the name of the constellation to be generated, used to read the xml configuration file
 def constellation_configuration(dT , constellation_name):
     # the path to the constellation configuration information file .xml file

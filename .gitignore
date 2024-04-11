@@ -1,0 +1,15 @@
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+starperf_env/
+
+.vscode/
+
+__pycache__/
+
+__init__.py

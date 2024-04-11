@@ -9,6 +9,10 @@ Function : This script is used to test whether a constellation can be generated 
 '''
 import src.constellation_generation.by_TLE.constellation_configuration as constellation_configuration
 
+import sys
+
+sys.path.append("D:/Pyproject/StarPerf_Simulator/")
+
 
 def constellation_generation_test():
     dT = 1000

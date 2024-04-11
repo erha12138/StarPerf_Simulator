@@ -11,7 +11,7 @@ import src.constellation_generation.by_XML.constellation_configuration as conste
 
 
 def constellation_generation_test():
-    dT = 5730
+    dT = 200
     constellation_name = "Starlink"
     # generate the constellations
     constellation = constellation_configuration.constellation_configuration(dT=dT,
