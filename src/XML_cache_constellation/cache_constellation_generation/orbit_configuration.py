@@ -14,8 +14,8 @@ from datetime import datetime
 from sgp4.api import Satrec, WGS72
 import numpy as np
 import pandas as pd
-import src.XML_constellation.constellation_entity.orbit as ORBIT
-import src.XML_constellation.constellation_entity.satellite as SATELLITE
+import src.XML_cache_constellation.constellation_entity.orbit as ORBIT
+import src.XML_cache_constellation.constellation_entity.satellite as SATELLITE
 
 
 

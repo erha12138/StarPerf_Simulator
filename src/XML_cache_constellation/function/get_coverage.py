@@ -1,31 +1,16 @@
-'''
-
-Author : yunanhou
-
-Date : 2023/11/08
-
-Function : Calculate constellation coverage in bent-pipe mode
-
-Implementation method: In bent-pipe mode, the coverage of the constellation is not only related to the satellite itself,
-                       but also to the GS. If a user is in an area where a satellite can be seen overhead, but there is
-                       no GS within the visible range of the satellite, then the area where the user is located is said
-                       to be not covered by bent-pipe. Specifically, the coverage rate in bent-pipe mode can be
-                       calculated as follows: First, divide the earth's surface into several tiles, for example, every
-                       10° interval according to the longitude and latitude, so that you will get 18*36 tiles. Then
-                       select a point (latitude and longitude) in each tile as the user's position, take the user as the
-                       perspective, calculate all satellites visible to the user (note the set of these satellites as S)
-                       , traverse all satellites in the S set, as long as If at least one satellite in the S set has a
-                       GS in its visible field of view, the tile is considered to be covered. Perform this operation on
-                       all tiles, and finally divide the number of covered tiles by the total number of tiles, which is
-                       the coverage rate of the constellation under the current timeslot. Perform the above operation on
-                       all timeslots to obtain the constellation coverage under each timeslot. Constellation coverage,
-                       and finally average the value and return it as the final constellation coverage.
-
-'''
-import math
-import src.XML_constellation.constellation_entity.ground_station as GS
 import xml.etree.ElementTree as ET
-import src.XML_constellation.constellation_entity.user as USER
+import src.XML_cache_constellation.constellation_entity.ground_station as GS
+# from src.XML_cache_constellation.constellation_entity.user import user, generate_users
+import math
+
+# The Tile class is a class used to represent a certain area on the earth's surface. The area is represented by four latitude and longitude coordinates.
+# Tile类是用来表示地球表面某个区域的类。 该区域由四个纬度和经度坐标表示
+class Tile:
+    def __init__(self, longitude_start, longitude_end, latitude_start, latitude_end):
+        self.longitude_start = longitude_start
+        self.longitude_end = longitude_end
+        self.latitude_start = latitude_start
+        self.latitude_end = latitude_end
 
 # Read xml document
 def xml_to_dict(element):
@@ -50,14 +35,31 @@ def read_xml_file(file_path):
     return {root.tag: xml_to_dict(root)}
 
 
-# The Tile class is a class used to represent a certain area on the earth's surface. The area is represented by four
-# latitude and longitude coordinates.
-class Tile:
-    def __init__(self, longitude_start, longitude_end, latitude_start, latitude_end):
-        self.longitude_start = longitude_start
-        self.longitude_end = longitude_end
-        self.latitude_start = latitude_start
-        self.latitude_end = latitude_end
+
+# Function : given a longitude and latitude coordinate position on the earth's surface, find all the satellites that can
+#            be seen at the position at time t, and return a list set composed of these satellites.
+# Parameters:
+# user : the user, which is a User class object
+# t : the t-th timeslot
+# sh : the shell of the constellation
+# minimum_elevation : the minimum elevation angle of the ground observation point, in degrees
+def user_visible_all_satellites(user , t , sh , minimum_elevation):
+    # calculate the coordinates of the user in the three-dimensional Cartesian coordinate system
+    user_x,user_y,user_z = latilong_to_descartes(user , "User")
+    # define a list to represent the collection of all satellites that the user can see.
+    user_visible_all_satellites_list = []
+    # traverse all satellites in sh
+    for orbit in sh.orbits:
+        for satellite in orbit.satellites:
+            # calculate the coordinates of the satellite satellite in the three-dimensional Cartesian
+            # coordinate system at time t
+            sat_x,sat_y,sat_z = latilong_to_descartes(satellite , "satellite" , t)
+            # determine whether satellite and user are visible. If visible, add satellite to
+            # user_visible_all_satellites_list
+            if judgePointToSatellite(sat_x,sat_y,sat_z , user_x,user_y,user_z , minimum_elevation):
+                user_visible_all_satellites_list.append(satellite)
+    return user_visible_all_satellites_list  # 这里直接拿到用户可见的所有卫星，要不直接把所有用户送进去？？
+
 
 
 # Function : convert the latitude and longitude coordinates of ground GS/POP points/user terminals/satellites into
@@ -73,12 +75,12 @@ def latilong_to_descartes(transformed_object , object_type , t=None):
     a = 6371000.0
     e2 = 0.00669438002290
     if object_type == "satellite":
-        longitude = math.radians(transformed_object.longitude[t - 1])
-        latitude = math.radians(transformed_object.latitude[t - 1])
+        longitude = math.radians(transformed_object.longitude[t])
+        latitude = math.radians(transformed_object.latitude[t])
         fac1 = 1 - e2 * math.sin(latitude) * math.sin(latitude)
         N = a / math.sqrt(fac1)
         # the unit of satellite height above the ground is meters
-        h = transformed_object.altitude[t - 1] * 1000
+        h = transformed_object.altitude[t] * 1000
         X = (N + h) * math.cos(latitude) * math.cos(longitude)
         Y = (N + h) * math.cos(latitude) * math.sin(longitude)
         Z = (N * (1 - e2) + h) * math.sin(latitude)
@@ -118,33 +120,6 @@ def judgePointToSatellite(sat_x , sat_y , sat_z , point_x , point_y , point_z , 
     else:
         return True
 
-
-# Function : given a longitude and latitude coordinate position on the earth's surface, find all the satellites that can
-#            be seen at the position at time t, and return a list set composed of these satellites.
-# Parameters:
-# user : the user, which is a User class object
-# t : the t-th timeslot
-# sh : the shell of the constellation
-# minimum_elevation : the minimum elevation angle of the ground observation point, in degrees
-def user_visible_all_satellites(user , t , sh , minimum_elevation):
-    # calculate the coordinates of the user in the three-dimensional Cartesian coordinate system
-    user_x,user_y,user_z = latilong_to_descartes(user , "User")
-    # define a list to represent the collection of all satellites that the user can see.
-    user_visible_all_satellites_list = []
-    # traverse all satellites in sh
-    for orbit in sh.orbits:
-        for satellite in orbit.satellites:
-            # calculate the coordinates of the satellite satellite in the three-dimensional Cartesian
-            # coordinate system at time t
-            sat_x,sat_y,sat_z = latilong_to_descartes(satellite , "satellite" , t)
-            # determine whether satellite and user are visible. If visible, add satellite to
-            # user_visible_all_satellites_list
-            if judgePointToSatellite(sat_x,sat_y,sat_z , user_x,user_y,user_z , minimum_elevation):
-                user_visible_all_satellites_list.append(satellite)
-    return user_visible_all_satellites_list  # 这里直接拿到用户可见的所有卫星，要不直接把所有用户送进去？？
-
-
-
 # Function : Determine whether among all the satellites in the satellites collection, there is at least one satellite
 #            with at least 1 GS within its visible range. If so, return true, otherwise return false
 # Parameters:
@@ -163,8 +138,11 @@ def judge_user_coveraged(satellites , t , GSs , minimum_elevation):
             # determine whether the satellite sat can see gs, if so, return true
             if judgePointToSatellite(sat_x, sat_y, sat_z , gs_x,gs_y,gs_z , minimum_elevation):
                 return True
+            ## 每个用户对应一些可用卫星，每个可用卫星会对应一些GS，
+            ## 每个时刻都有这么一个值，是不是应该由用户去对GS合理一点，因为用户是不动的
+            ## 这里是可以把GS的信息拿到的，但是会不会有点冗杂
+            ## 不在这里算，这里算完是全局的，所有timeslot以及所用用户都有了，没必要，最后拿到用户和卫星再去拿这个代码去计算吧
     return False
-
 
 
 # Function : Calculate the coverage of the constellation in bent-pipe mode
@@ -176,12 +154,14 @@ def judge_user_coveraged(satellites , t , GSs , minimum_elevation):
 # minimum_elevation : the minimum elevation angle of the ground observation point, in degrees
 # tile_size : the size of the square block on the earth's surface. For example, the default is to cut every 10°,
 #             that is, each block occupies 10° longitude and 10° latitude.
-def coverage(dT , sh , ground_station_file , minimum_elevation = 25 , tile_size=10):
-    Tiles = []
-    for lon in range(-180, 180, tile_size):
-        for lat in range(-90, 90, tile_size):
-            tile = Tile(lon, lon + tile_size, lat, lat + tile_size)
-            Tiles.append(tile)
+# 当前时刻还是全部时刻，全部时刻的覆盖都可以直接计算出来
+def get_current_coverage_from_shell(tt, sh, ground_station_file, users, minimum_elevation = 25):
+    # Tiles = []
+    # for lon in range(-180, 180, tile_size):   # 先分地球上的tiles
+    #     for lat in range(-90, 90, tile_size):
+    #         tile = Tile(lon, lon + tile_size, lat, lat + tile_size)
+    #         Tiles.append(tile)
+    
     # read ground base station data
     ground_station = read_xml_file(ground_station_file)
     # generate GS
@@ -194,25 +174,22 @@ def coverage(dT , sh , ground_station_file , minimum_elevation = 25 , tile_size=
                                 antenna_count=int(ground_station['GSs']['GS' + str(gs_count)]['Antenna_Count']),
                                 uplink_GHz=float(ground_station['GSs']['GS' + str(gs_count)]['Uplink_Ghz']),
                                 downlink_GHz=float(ground_station['GSs']['GS' + str(gs_count)]['Downlink_Ghz']))
-        GSs.append(gs)
+        GSs.append(gs)    ## 有多少个GS都导入进去了
+        
+        
     # define a list to represent the constellation coverage of each timeslot
-    coverage_rate_per_timeslot = []
-    for t in range(1, (int)(sh.orbit_cycle / dT) + 2, 1):
+    # 什么时候、并且是哪几号卫星，覆盖到这个区域
+    coverage_all_timeslot = []
+    for t in range(0,tt,1):  # 对的上，就从0开始吧
         # define a list to represent the set of tiles that can be covered by the constellation at time t
-        coveraged_tiles = []
-        for tile in Tiles:
-            # find a point in each tile to represent the user's location
-            user_longitude = (tile.longitude_start + tile.longitude_end) / 2
-            user_latitude = (tile.latitude_start + tile.latitude_end) / 2
-            user = USER.user(user_longitude, user_latitude)
-            # find all satellites visible to (user_longitude, user_latitude)
-            user_visible_all_satellites_list = user_visible_all_satellites(user , t , sh , minimum_elevation)
-            # If there is at least one satellite in the user_visible_all_satellites_list collection that has at
-            # least one GS within its visible range, the current tile is covered
-            if judge_user_coveraged(user_visible_all_satellites_list , t , GSs , minimum_elevation):
-                coveraged_tiles.append(tile)
-        # calculate the current timeslot constellation coverage
-        coverage_rate_current_timeslot = 1.0 * len(coveraged_tiles) / len(Tiles)
-        coverage_rate_per_timeslot.append(coverage_rate_current_timeslot)
-
-    return coverage_rate_per_timeslot
+        users_visible_sattilates_per_timeslot = []
+        for user in users:
+            ## 拿到这个用户的当前时刻的可见卫星
+            user_visible_all_satellites_list = user_visible_all_satellites(user, t, sh, minimum_elevation)
+            ## 当前用户的可见卫星需要考虑这附近是否可见GS，有GS才可以使用，是不是可以找到有几个GS
+            if judge_user_coveraged(user_visible_all_satellites_list , t , GSs , minimum_elevation): 
+                users_visible_sattilates_per_timeslot.append(user_visible_all_satellites_list)  # 拿不到用户ID，很多用户拿不到GS，说明动态性很强，要不要画一张点图
+            
+        coverage_all_timeslot.append(users_visible_sattilates_per_timeslot)
+    # 返回每个 timeslot 每个用户 的可视卫星，以及其 GS 状态
+    return coverage_all_timeslot

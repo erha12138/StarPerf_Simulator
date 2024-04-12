@@ -14,7 +14,7 @@ import random
 total_cachespace = random.randint(0, 20)
 
 class satellite:
-    def __init__(self , nu , orbit , true_satellite, total_cachespace):
+    def __init__(self , nu , orbit , true_satellite, total_cachespace = total_cachespace):
         # longitude (degree), because the satellite is constantly moving, there are many longitudes. Use the list type
         # to store all the longitudes of the satellite.
         self.longitude = []
