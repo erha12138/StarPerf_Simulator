@@ -20,7 +20,7 @@ class user:
         self.latitude = latitude # the latitude of user
 
 ## 给定用户的经纬度范围，保证在同一片区域
-def generate_users(num_users=10, start_longitude = 60, start_latitude = 70, end_longitude = 40, end_latitude = 50):
+def generate_users(num_users=10, start_longitude = 60, start_latitude = 52, end_longitude = 70, end_latitude = 62): # 加拿大的经纬度
     users = []
     for i in range(num_users):
         # Generate random longitude and latitude within a reasonable range
