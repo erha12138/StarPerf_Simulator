@@ -47,3 +47,4 @@ class satellite:
 
     def cache_mananage(self, request, other_information): # 考虑xxx，xxx来实现缓存内容
         pass
+    def cache_energy_consumption(self, ) # 考虑xxx，缓存读写要考虑能耗，主要是存入写入要考虑能耗

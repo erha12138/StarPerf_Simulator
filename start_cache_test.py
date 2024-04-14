@@ -31,6 +31,10 @@ def main():
         visible_sattilates_in_all_shells_and_time.append(get_current_coverage_from_shell(tt=timeslots,sh=shell,ground_station_file= \
                                         ground_station_file, users= users))
     
+    # 先加入每个卫星与地面基站的能耗考虑
+    # 可以每个直接获取下一时刻的用户内容，
+    # 那么接下来还是先写用户请求
+    # 得结合video特性，
     print("end test")
 
 ## 每个卫星除了轨迹位置，还需要缓存信息，加在satellite的entity中  OK
