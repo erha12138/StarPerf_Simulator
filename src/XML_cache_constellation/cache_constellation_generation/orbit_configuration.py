@@ -89,5 +89,6 @@ def orbit_configuration(sh , dT):
             satellite.longitude = list(satellite_position['longitude'].values.tolist())
             satellite.latitude = list(satellite_position['latitude'].values.tolist())
             satellite.altitude = list(satellite_position['altitude'].values.tolist())
+            # satellite.id = 
             orbit.satellites.append(satellite)
         sh.orbits.append(orbit)

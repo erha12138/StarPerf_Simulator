@@ -37,7 +37,7 @@ class satellite:
         # constellation has multiple shells, the id of each satellite is the number of the shell in which it is located.
         # Each shell is numbered starting from 1. The ID number is initially -1, and the user does not need to specify
         # it manually.
-        self.id = -1
+        self.id = -1  ## 我要找到轨迹的话，satellite id得设出来
         # real satellite object created with sgp4 and skyfield models
         self.true_satellite = true_satellite
 

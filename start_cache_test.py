@@ -42,5 +42,7 @@ def main():
 ## 先把 delay 的group加上去，看看 原本加入的position group怎么用，position里面有shell，shell里面有对应的轨迹和卫星位置数据集
 ## h5里面存了position position里存了shell信息，shell里面存了每个卫星的信息，每个shell有，
 
+# 我有下一时刻的轨迹，要不直接可以预测来做
+
 if __name__ == "__main__":
     main()
