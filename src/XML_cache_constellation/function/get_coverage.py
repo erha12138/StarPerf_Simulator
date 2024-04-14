@@ -182,14 +182,16 @@ def get_current_coverage_from_shell(tt, sh, ground_station_file, users, minimum_
     coverage_all_timeslot = []
     for t in range(0,tt,1):  # 对的上，就从0开始吧
         # define a list to represent the set of tiles that can be covered by the constellation at time t
-        users_visible_sattilates_per_timeslot = []
+        users_visible_sattilates_per_timeslot = {}
         for user in users:
             ## 拿到这个用户的当前时刻的可见卫星
             user_visible_all_satellites_list = user_visible_all_satellites(user, t, sh, minimum_elevation)
             ## 当前用户的可见卫星需要考虑这附近是否可见GS，有GS才可以使用，是不是可以找到有几个GS
             if judge_user_coveraged(user_visible_all_satellites_list , t , GSs , minimum_elevation): 
-                users_visible_sattilates_per_timeslot.append(user_visible_all_satellites_list)  # 拿不到用户ID，很多用户拿不到GS，说明动态性很强，要不要画一张点图
+                users_visible_sattilates_per_timeslot[user.user_name] = user_visible_all_satellites_list  # 拿不到用户ID，很多用户拿不到GS，说明动态性很强，要不要画一张点图
             
         coverage_all_timeslot.append(users_visible_sattilates_per_timeslot)
     # 返回每个 timeslot 每个用户 的可视卫星，以及其 GS 状态
+    # 考虑确认每个ID，用字典的形式，别用列表，看不懂，每个satellite已经有ID了
+    # 每一个时刻，存着每一个用户可以见的卫星，可能有用户不能看见被GS服务的卫星
     return coverage_all_timeslot
