@@ -43,7 +43,11 @@ class satellite:
 
         ## 每个卫星需要 计算、缓存空间的描述
         self.total_cachespace = total_cachespace # 总共拥有的缓存内容
-        self.cached = 0 # 初始为0，在一个缓存管理决策的方法中更新
+        self.now_cachedsapce = 0 # 初始为0，在一个缓存管理决策的方法中更新
+        self.cache_content = 
+
+    # 有VIDEO_TYPE中视频
+
 
     ## 我只针对video缓存这种业务，每个MEC中有专门用来做这个的缓存空间，且video都是成块的
     ## 用户请求是要考虑的，但是考虑的是之前的用户请求的分布，来进行决策，然后产生缓存结果，就是先产生结果，在缓存结果中，考虑用户的效用问题

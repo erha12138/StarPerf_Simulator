@@ -58,7 +58,7 @@ def user_visible_all_satellites(user , t , sh , minimum_elevation):
             # user_visible_all_satellites_list
             if judgePointToSatellite(sat_x,sat_y,sat_z , user_x,user_y,user_z , minimum_elevation):
                 user_visible_all_satellites_list.append(satellite)
-    return user_visible_all_satellites_list  # 这里直接拿到用户可见的所有卫星，要不直接把所有用户送进去？？
+    return user_visible_all_satellites_list  # 这里直接拿到该用户可见的所有卫星
 
 
 
@@ -138,11 +138,43 @@ def judge_user_coveraged(satellites , t , GSs , minimum_elevation):
             # determine whether the satellite sat can see gs, if so, return true
             if judgePointToSatellite(sat_x, sat_y, sat_z , gs_x,gs_y,gs_z , minimum_elevation):
                 return True
+            
             ## 每个用户对应一些可用卫星，每个可用卫星会对应一些GS，
             ## 每个时刻都有这么一个值，是不是应该由用户去对GS合理一点，因为用户是不动的
             ## 这里是可以把GS的信息拿到的，但是会不会有点冗杂
             ## 不在这里算，这里算完是全局的，所有timeslot以及所用用户都有了，没必要，最后拿到用户和卫星再去拿这个代码去计算吧
     return False
+
+def judge_satellite_and_GS_coveraged(satellites_list , t , GSs , minimum_elevation):
+    new_satellite_list_with_server = []
+    new_satellite_list_without_server = []
+    with_server_flag = 0
+    for sat in satellites_list:
+        # calculate the coordinates of satellite sat in the three-dimensional Cartesian coordinate system
+        sat_x, sat_y, sat_z = latilong_to_descartes(sat, "satellite", t)
+        # traverse all base stations in GSs and use sat to determine whether they are visible one by one.
+        for gs in GSs:
+            # calculate the coordinates of base station gs in the three-dimensional Cartesian coordinate system
+            gs_x,gs_y,gs_z = latilong_to_descartes(gs , "GS")
+            
+            if judgePointToSatellite(sat_x, sat_y, sat_z , gs_x,gs_y,gs_z , minimum_elevation):
+                ## 如果有一个GS，就可以了
+                with_server_flag = 1
+                new_satellite_list_with_server.append(sat)
+                break
+            else:
+                pass
+                # 如果是False，说明当前这个卫星不能为这个用户提供服务，则不加入新的卫星列表，
+        # 不可以更新缓存，但原有缓存还存在着，是可以提供服务的，这颗卫星还是可以为用户提供服务的，用自己原有的缓存
+        if not with_server_flag:
+            new_satellite_list_without_server.append(sat)
+        with_server_flag = 0
+    return new_satellite_list_with_server, new_satellite_list_without_server
+
+
+
+
+
 
 
 # Function : Calculate the coverage of the constellation in bent-pipe mode
@@ -179,18 +211,27 @@ def get_current_coverage_from_shell(tt, sh, ground_station_file, users, minimum_
         
     # define a list to represent the constellation coverage of each timeslot
     # 什么时候、并且是哪几号卫星，覆盖到这个区域
-    coverage_all_timeslot = []
+    coverage_all_timeslot = {"server_with_GS":[],"server_without_GS":[]}
     for t in range(0,tt,1):  # 对的上，就从0开始吧
         # define a list to represent the set of tiles that can be covered by the constellation at time t
-        users_visible_sattilates_per_timeslot = {}
+        users_visible_sattilates_with_GS_per_timeslot = {}
+        users_visible_sattilates_without_GS_per_timeslot = {}
         for user in users:
             ## 拿到这个用户的当前时刻的可见卫星
             user_visible_all_satellites_list = user_visible_all_satellites(user, t, sh, minimum_elevation)
+            ## 现在来遍历 user_visible_all_satellites_list，看其中的卫星是否可以看见GS，看不见的删掉，剩下的是真的能为用户提供服务的用户
+            lis11, list2 = judge_satellite_and_GS_coveraged(user_visible_all_satellites_list , t , GSs , minimum_elevation)
+            users_visible_sattilates_with_GS_per_timeslot[user.user_name] = lis11
+            users_visible_sattilates_without_GS_per_timeslot[user.user_name] = list2
+            # if judge_user_coveraged(user_visible_all_satellites_list , t , GSs , minimum_elevation): 
+            ## 这里的逻辑是有卫星能看见地面站就返回，但不意味着当前用户可见的所有卫星都可以看见地面站，这里得改
+
             ## 当前用户的可见卫星需要考虑这附近是否可见GS，有GS才可以使用，是不是可以找到有几个GS
-            if judge_user_coveraged(user_visible_all_satellites_list , t , GSs , minimum_elevation): 
-                users_visible_sattilates_per_timeslot[user.user_name] = user_visible_all_satellites_list  # 拿不到用户ID，很多用户拿不到GS，说明动态性很强，要不要画一张点图
-            
-        coverage_all_timeslot.append(users_visible_sattilates_per_timeslot)
+            # 拿不到用户ID，很多用户拿不到GS，说明动态性很强，要不要画一张点图
+
+        coverage_all_timeslot["server_with_GS"] = users_visible_sattilates_with_GS_per_timeslot
+        coverage_all_timeslot["server_without_GS"] = users_visible_sattilates_without_GS_per_timeslot
+        
     # 返回每个 timeslot 每个用户 的可视卫星，以及其 GS 状态
     # 考虑确认每个ID，用字典的形式，别用列表，看不懂，每个satellite已经有ID了
     # 每一个时刻，存着每一个用户可以见的卫星，可能有用户不能看见被GS服务的卫星

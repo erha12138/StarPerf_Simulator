@@ -10,38 +10,70 @@ dT = 200  # 时间间隔
 constellation_name = "Starlink"
 h5_path = 'data/XML_constellation/Starlink.h5'
 ground_station_file = 'config/ground_stations/Starlink.xml'
+
+USER_NUM = 10 # 用户数量
+VIDEO_TYPE = 10 # 视频类型
+
+USER_POSITION_RANGE = [-118,40,-108,50] # 开始经度，开始维度，结束经度，结束纬度
+
 def main():
-    print("start cache")
+    print("\t\033[31mStarting XML Constellations with cache Running...\033[0m")
+
+    print("\t\t\033[31mRunning(01) : constellation generation\033[0m")
     constellation = constellation_configuration.constellation_configuration(dT=dT, 
                                                                             constellation_name=constellation_name)
-    timeslots = len(constellation.shells[0].orbits[00].satellites[00].altitude) # 有几个时间戳
-    
-#    """ 
-#     生成了用户位置信息，考虑了，先给了默认值，10个用户位置
-#     num_users=10, 
-#     start_longitude = 60, 
-#     start_latitude = 70, 
-#     end_longitude = 40, 
-#     end_latitude = 50
-#     """
+    time_len = len(constellation.shells[0].orbits[00].satellites[00].altitude) # 有几个时间戳
+
+    print("\t\t\033[31mfinish(01) : constellation generation success\033[0m")
+
+
+    print("\t\t\033[31mRunning(02) : Video list generation\033[0m")
+    ## 我需要先生成video_list
+    from src.XML_cache_constellation.constellation_entity.content import Request, Video, generate_requests_set_for_per_user
+    video_list = [Video(id=video_id, num_chunks=19, chunk_size=50) for video_id in range(VIDEO_TYPE)]  # size单位为50mbps，
+    print("\t\t\033[31mfinish(02) : Video list generation success\033[0m")
+
+    print("\t\t\033[31mRunning(03) : User list generation\033[0m")
+    # 生成了用户列表，users_set[0] 表示有几个用户，其中包含了用户的地理位置坐标，
+    # user.request是个列表，包含了每个时刻的用户请求，目前设计的对同一个VIDEO顺序请求
     from src.XML_cache_constellation.constellation_entity.user import user, generate_users
-    users = generate_users() 
+    users_set = generate_users(num_users = USER_NUM, 
+                               user_position_range = USER_POSITION_RANGE, 
+                               time_len = time_len,
+                               video_list = video_list) 
+    print("\t\t\033[31mfinish(03) : User list generation success\033[0m")
+
+    ## 请求的集合，可以直接用来作为外部环境输入算法
+    
+
+    
+    print("\t\t\033[31mRunning(04) : get visible sattilates by users\033[0m")
+    ## 找到每个用户当前可以请求到的卫星id
     visible_sattilates_in_all_shells_and_time = []
     for shell in constellation.shells:
-        visible_sattilates_in_all_shells_and_time.append(get_current_coverage_from_shell(tt=timeslots,sh=shell,ground_station_file= \
-                                        ground_station_file, users= users))
-    
-    # 先加入每个卫星与地面基站的能耗考虑
+        visible_sattilates_in_all_shells_and_time.append(get_current_coverage_from_shell(tt=time_len,
+                                                                                         sh=shell,
+                                                                                         ground_station_file=ground_station_file, 
+                                                                                         users= users_set))
+    print("\t\t\033[31mfinish(04) : get visible sattilates by users success\033[0m")
+
+
+    # 下面要加入每个卫星与地面基站的能耗考虑
     # 可以每个直接获取下一时刻的用户内容，
-    # 那么接下来还是先写用户请求
-    # 得结合video特性，
+
     print("end test")
 
 ## 每个卫星除了轨迹位置，还需要缓存信息，加在satellite的entity中  OK
 
 ## 轨迹就在constellation里，每次都要计算生成，看能不能直接冲 h5里面直接读取  give up
 
-## 先把轨迹与用户位置的对应关系可视化，我要获取是否有覆盖，哪个更近，也与groundstation有关 trying
+## 先把轨迹与用户位置的对应关系可视化，我要获取是否有覆盖，哪个更近，也与groundstation有关 OK
+
+## 针对VIDEO的用户请求 OK
+
+## 为每个卫星加入cache空间与能耗的描述，并想清楚他们的关系，每个卫星可以收到用户请求 trying
+
+
 
 ## 先把 delay 的group加上去，看看 原本加入的position group怎么用，position里面有shell，shell里面有对应的轨迹和卫星位置数据集
 ## h5里面存了position position里存了shell信息，shell里面存了每个卫星的信息，每个shell有，
