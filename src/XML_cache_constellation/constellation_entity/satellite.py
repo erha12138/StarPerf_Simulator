@@ -11,13 +11,13 @@ Function : This file defines the satellite class satellite, which is the base cl
 '''
 import random
 
-total_cachespace = random.randint(0, 20)
+total_cachespace = random.randint(10, 50)
 
 class satellite:
     def __init__(self , nu , orbit , true_satellite, total_cachespace = total_cachespace):
         # longitude (degree), because the satellite is constantly moving, there are many longitudes. Use the list type
         # to store all the longitudes of the satellite.
-        self.longitude = []
+        self.longitude = [] # 这里经纬度是列表，所有时间的经纬度都获取到
         # latitude (degree), because the satellite is constantly moving, there are many latitudes. Use the list type
         # to store all the latitudes of the satellite.
         self.latitude = []
@@ -41,11 +41,19 @@ class satellite:
         # real satellite object created with sgp4 and skyfield models
         self.true_satellite = true_satellite
 
-        ## 每个卫星需要 计算、缓存空间的描述
+        ## 每个卫星的缓存空间的描述
         self.total_cachespace = total_cachespace # 总共拥有的缓存内容
         self.now_cachedsapce = 0 # 初始为0，在一个缓存管理决策的方法中更新
-        self.cache_content = 
+        self.cache_content = [] # 初始缓存内容为空，看看要不要用，在外面的cache content类里面维护也可以，在外面写第二个循环，逻辑更好控制
+        # 这是应该video chunk的id，那就存入二元组，(video_id,chunk_id)
 
+        ## 更新内容时会有写入能耗，写入就是更新的内容时产生的能耗，
+        ## 本质上应该减少更新频率来减少能耗
+        self.energy_capacity = 10 ## 写入时会消耗能量，这是能量上限
+        # 需要每一时刻的能耗吗，不要
+        
+        ## 每一时刻做缓存决策，要不要先把卫星生成了，再在时间轴上做缓存决策的判断，
+        ## 再修改哪些卫星的状态，因为我已经获取了每一时刻为用户工作的卫星了
     # 有VIDEO_TYPE中视频
 
 
@@ -56,6 +64,6 @@ class satellite:
 
     def cache_mananage(self, request, other_information): # 考虑xxx，xxx来实现缓存内容
         pass
-    def cache_energy_consumption(self, ): # 考虑xxx，缓存读写要考虑能耗，主要是存入写入要考虑能耗
+    def cache_energy_consumption(self): # 考虑xxx，缓存读写要考虑能耗，主要是存入写入要考虑能耗
         pass
 

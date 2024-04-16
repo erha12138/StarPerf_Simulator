@@ -2,7 +2,7 @@ import xml.etree.ElementTree as ET
 import matplotlib.pyplot as plt
 
 # 解析XML文件
-tree = ET.parse('D:/Pyproject/StarPerf_Simulator/config/ground_stations/Starlink.xml')
+tree = ET.parse('D:/StarPerf_Simulator/config/ground_stations/Starlink.xml')
 root = tree.getroot()
 
 # 存储地理位置信息
@@ -26,5 +26,5 @@ for location in locations:
     ax.plot(longitude, latitude, 'ro')
     ax.text(longitude, latitude, description, ha='right')
 
-plt.savefig("D:/Pyproject/StarPerf_Simulator/config/ground_stations/GS_location.jpg")
+plt.savefig("D:/StarPerf_Simulator/config/ground_stations/GS_location.jpg")
 plt.show()

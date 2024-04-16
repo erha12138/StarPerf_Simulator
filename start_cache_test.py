@@ -14,7 +14,7 @@ ground_station_file = 'config/ground_stations/Starlink.xml'
 USER_NUM = 10 # 用户数量
 VIDEO_TYPE = 10 # 视频类型
 
-USER_POSITION_RANGE = [-118,40,-108,50] # 开始经度，开始维度，结束经度，结束纬度
+USER_POSITION_RANGE = [-73.9,-36.4,-63.9,-26.4] # 开始经度，开始维度，结束经度，结束纬度
 
 def main():
     print("\t\033[31mStarting XML Constellations with cache Running...\033[0m")
@@ -30,7 +30,7 @@ def main():
     print("\t\t\033[31mRunning(02) : Video list generation\033[0m")
     ## 我需要先生成video_list
     from src.XML_cache_constellation.constellation_entity.content import Request, Video, generate_requests_set_for_per_user
-    video_list = [Video(id=video_id, num_chunks=19, chunk_size=50) for video_id in range(VIDEO_TYPE)]  # size单位为50mbps，
+    video_list = [Video(id=video_id, num_chunks=19, chunk_size=1) for video_id in range(VIDEO_TYPE)]  # size单位为50mbps，
     print("\t\t\033[31mfinish(02) : Video list generation success\033[0m")
 
     print("\t\t\033[31mRunning(03) : User list generation\033[0m")
@@ -48,18 +48,28 @@ def main():
 
     
     print("\t\t\033[31mRunning(04) : get visible sattilates by users\033[0m")
-    ## 找到每个用户当前可以请求到的卫星id
+    ## 找到每个用户当前可以请求到的卫星id，时间戳哪去了？？？
     visible_sattilates_in_all_shells_and_time = []
     for shell in constellation.shells:
         visible_sattilates_in_all_shells_and_time.append(get_current_coverage_from_shell(tt=time_len,
                                                                                          sh=shell,
                                                                                          ground_station_file=ground_station_file, 
-                                                                                         users= users_set))
+                                                                               users= users_set))
     print("\t\t\033[31mfinish(04) : get visible sattilates by users success\033[0m")
 
 
     # 下面要加入每个卫星与地面基站的能耗考虑
     # 可以每个直接获取下一时刻的用户内容，
+
+    ## 要不要在这里开始用t来做，visible_sattilates_in_all_shells_and_time已经把需要用的卫星都记录下来了
+    ## 注意卫星的结构问题：最底层的卫星经纬度是已经包含了所有时间戳的列表
+    ## visible_sattilates_in_all_shells_and_time shell 下面就马上到了时间戳层
+    ## 每个卫星类中只记录存储空间最大容量与最大能耗值
+
+    ## 具体的存储内容在外卖用一个cache content类去维护，在外面把用时间戳把每一个不一样的奇奇怪怪的结构统一起来
+    ## 每个时间戳有个缓存内容，也包含了能耗  吧
+    cache_content_in_timeslot = [] 
+
 
     print("end test")
 

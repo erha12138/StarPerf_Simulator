@@ -211,8 +211,10 @@ def get_current_coverage_from_shell(tt, sh, ground_station_file, users, minimum_
         
     # define a list to represent the constellation coverage of each timeslot
     # 什么时候、并且是哪几号卫星，覆盖到这个区域
-    coverage_all_timeslot = {"server_with_GS":[],"server_without_GS":[]}
+    coverage_all_timeslot = []
     for t in range(0,tt,1):  # 对的上，就从0开始吧
+        coverage_current_timeslot = {"server_with_GS":[],"server_without_GS":[]}
+
         # define a list to represent the set of tiles that can be covered by the constellation at time t
         users_visible_sattilates_with_GS_per_timeslot = {}
         users_visible_sattilates_without_GS_per_timeslot = {}
@@ -228,10 +230,9 @@ def get_current_coverage_from_shell(tt, sh, ground_station_file, users, minimum_
 
             ## 当前用户的可见卫星需要考虑这附近是否可见GS，有GS才可以使用，是不是可以找到有几个GS
             # 拿不到用户ID，很多用户拿不到GS，说明动态性很强，要不要画一张点图
-
-        coverage_all_timeslot["server_with_GS"] = users_visible_sattilates_with_GS_per_timeslot
-        coverage_all_timeslot["server_without_GS"] = users_visible_sattilates_without_GS_per_timeslot
-        
+        coverage_current_timeslot["server_with_GS"] = users_visible_sattilates_with_GS_per_timeslot
+        coverage_current_timeslot["server_without_GS"] = users_visible_sattilates_without_GS_per_timeslot
+        coverage_all_timeslot.append(coverage_current_timeslot)
     # 返回每个 timeslot 每个用户 的可视卫星，以及其 GS 状态
     # 考虑确认每个ID，用字典的形式，别用列表，看不懂，每个satellite已经有ID了
     # 每一个时刻，存着每一个用户可以见的卫星，可能有用户不能看见被GS服务的卫星
