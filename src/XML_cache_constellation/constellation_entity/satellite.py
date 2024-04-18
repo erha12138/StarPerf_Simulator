@@ -43,15 +43,16 @@ class satellite:
 
         ## 每个卫星的缓存空间的描述
         self.total_cachespace = total_cachespace # 总共拥有的缓存内容
-        self.now_cachedsapce = 0 # 初始为0，在一个缓存管理决策的方法中更新
+        self.now_cachedsapce = [] # 初始为0，在一个缓存管理决策的方法中更新，也是一个关于时间戳的list
         self.cache_content = [] # 初始缓存内容为空，看看要不要用，在外面的cache content类里面维护也可以，在外面写第二个循环，逻辑更好控制
-        # 这是应该video chunk的id，那就存入二元组，(video_id,chunk_id)
+        # 这是应该video chunk的id，那就存入二元组，(video_id,chunk_id)，每一杠时隙一个
 
         ## 更新内容时会有写入能耗，写入就是更新的内容时产生的能耗，
         ## 本质上应该减少更新频率来减少能耗
         self.energy_capacity = 10 ## 写入时会消耗能量，这是能量上限
+        self.energy_per_time = [] # 也是时间戳的list
         # 需要每一时刻的能耗吗，不要
-        
+        self.cache_update_agent = None # 用这个直接等于
         ## 每一时刻做缓存决策，要不要先把卫星生成了，再在时间轴上做缓存决策的判断，
         ## 再修改哪些卫星的状态，因为我已经获取了每一时刻为用户工作的卫星了
     # 有VIDEO_TYPE中视频
@@ -66,4 +67,62 @@ class satellite:
         pass
     def cache_energy_consumption(self): # 考虑xxx，缓存读写要考虑能耗，主要是存入写入要考虑能耗
         pass
+
+class satellite_pertime:
+    def __init__(self, time_slot, satellite, shell):
+        # longitude (degree), because the satellite is constantly moving, there are many longitudes. Use the list type
+        # to store all the longitudes of the satellite.
+        self.timeslot = time_slot
+        self.longitude = satellite.longitude[time_slot] # 这里经纬度是值
+        self.latitude =  satellite.latitude[time_slot]
+        self.altitude = satellite.altitude[time_slot]
+        self.ISL = []
+        self.nu = satellite.nu
+        self.shell = shell
+        self.id = satellite.id  ## 我要找到轨迹的话，satellite id得设出来
+        # real satellite object created with sgp4 and skyfield models
+        ## 每个卫星的缓存空间的描述
+        self.total_cachespace = satellite.total_cachespace # 总共拥有的缓存内容
+        self.now_cachedsapce = 0 # 初始为0
+        self.cache_content = [] # 初始缓存内容为空，看看要不要用，在外面的cache content类里面维护也可以，在外面写第二个循环，逻辑更好控制
+        # 这是应该video chunk的id，那就存入二元组，(video_id,chunk_id)，每一时隙一个
+        
+        ## 更新内容时会有写入能耗，写入就是更新的内容时产生的能耗，
+        ## 本质上应该减少更新频率来减少能耗
+        self.energy_capacity = 10 ## 写入时会消耗能量，这是能量上限
+        self.energy_per_time = 0 # 每一时刻的能耗
+        # self.cache_update_agent = None # 用这个直接等于
+        ## 每一时刻做缓存决策，要不要先把卫星生成了，再在时间轴上做缓存决策的判断
+
+    def to_json(self):
+        return {
+            'timeslot': self.timeslot,
+            'longitude': self.longitude,
+            'latitude': self.latitude,
+            'altitude': self.altitude,
+            'ISL': self.ISL,
+            'nu': self.nu,
+            'shell': self.shell,
+            'id': self.id,
+            'total_cachespace': self.total_cachespace,
+            'now_cachedsapce': self.now_cachedsapce,
+            'cache_content': self.cache_content
+            # 如果还有其他属性需要序列化，可以继续添加
+        }
+
+def get_new_satellite_list(visible_sattilates_in_all_shells_and_time, user_name, time_slot):
+    new_list = {"server_with_GS":[], "server_without_GS":[]}
+    shell_id = 0
+    for shell in visible_sattilates_in_all_shells_and_time:
+        for satellite in shell[time_slot]["server_with_GS"][user_name]:
+            new_list["server_with_GS"].append(satellite_pertime(time_slot = time_slot,
+                                              satellite = satellite,
+                                              shell = shell_id).to_json())
+        for satellite in shell[time_slot]["server_without_GS"][user_name]:
+            new_list["server_without_GS"].append(satellite_pertime(time_slot = time_slot,
+                                              satellite = satellite,
+                                              shell = shell_id).to_json())
+        shell_id += 1
+    return new_list
+            
 

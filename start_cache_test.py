@@ -3,10 +3,13 @@ from kits.get_h5file_satellite_position_data import get_h5file_satellite_positio
 from kits.get_h5file_tree_structure import print_hdf5_structure
 import h5py
 from src.XML_cache_constellation.function.get_coverage import get_current_coverage_from_shell
+import copy
+import pickle
+import json
 
 # 现在就用xml，tle可以下载，但是要自己输入每个shell的轨迹数量，现在不好说每个轨道是用什么轨迹数量比较合适
 # 就用每个constellation_configuration，来生成这一个周期的位置信息
-dT = 200  # 时间间隔
+dT = 2000  # 时间间隔
 constellation_name = "Starlink"
 h5_path = 'data/XML_constellation/Starlink.h5'
 ground_station_file = 'config/ground_stations/Starlink.xml'
@@ -26,7 +29,6 @@ def main():
 
     print("\t\t\033[31mfinish(01) : constellation generation success\033[0m")
 
-
     print("\t\t\033[31mRunning(02) : Video list generation\033[0m")
     ## 我需要先生成video_list
     from src.XML_cache_constellation.constellation_entity.content import Request, Video, generate_requests_set_for_per_user
@@ -34,7 +36,7 @@ def main():
     print("\t\t\033[31mfinish(02) : Video list generation success\033[0m")
 
     print("\t\t\033[31mRunning(03) : User list generation\033[0m")
-    # 生成了用户列表，users_set[0] 表示有几个用户，其中包含了用户的地理位置坐标，
+    # 生成了用户列表，users_set[i] 表示第i个用户，其中包含了用户的地理位置坐标，
     # user.request是个列表，包含了每个时刻的用户请求，目前设计的对同一个VIDEO顺序请求
     from src.XML_cache_constellation.constellation_entity.user import user, generate_users
     users_set = generate_users(num_users = USER_NUM, 
@@ -48,7 +50,7 @@ def main():
 
     
     print("\t\t\033[31mRunning(04) : get visible sattilates by users\033[0m")
-    ## 找到每个用户当前可以请求到的卫星id，时间戳哪去了？？？
+    ## 找到每个用户当前可以请求到的卫星id
     visible_sattilates_in_all_shells_and_time = []
     for shell in constellation.shells:
         visible_sattilates_in_all_shells_and_time.append(get_current_coverage_from_shell(tt=time_len,
@@ -58,19 +60,37 @@ def main():
     print("\t\t\033[31mfinish(04) : get visible sattilates by users success\033[0m")
 
 
+    print("\t\t\033[31mRunning(05) : generate useful initial data and structure\033[0m")
+    # 先把数据结构初始化出来
+    from src.XML_cache_constellation.constellation_entity.satellite import satellite_pertime, get_new_satellite_list
+    users_visible_new_satellite_per_timeslot = {}
+    for user in users_set:
+        users_visible_new_satellite_per_timeslot[user.user_name] = {} # 一个timeslot一个内容
+        for time_slot in range(time_len):
+            users_visible_new_satellite_per_timeslot[user.user_name][time_slot] = {"satellit_list":[], "user_request":()} # 在new_satellite里面写个属性记录第几层shell吧
+            users_visible_new_satellite_per_timeslot[user.user_name][time_slot]["satellit_list"] = get_new_satellite_list(visible_sattilates_in_all_shells_and_time, user.user_name, time_slot)
+            users_visible_new_satellite_per_timeslot[user.user_name][time_slot]["user_request"] = users_set[user.user_name].request[time_slot]
+    print("\t\t\033[31mfinish(05) : generate useful initial data and structure success\033[0m")
+     
+## 这个写完再写保存类的操作
+
+    print("\t\t\033[31mRunning(06) : save useful information\033[0m")
+    with open("D:/Pyproject/StarPerf_Simulator/data/XML_constellation/cache_record_data/users_visible_new_satellite_per_timeslot.json", 'w') as json_file:
+        json.dump(users_visible_new_satellite_per_timeslot, json_file)
+    print("\t\t\033[31mfinish(05) : users_visible_new_satellite_per_timeslot save in D:/Pyproject/StarPerf_Simulator/data/XML_constellation/cache_record_data/users_visible_new_satellite_per_timeslot.json success\033[0m")
+    
+    with open("D:/Pyproject/StarPerf_Simulator/data/XML_constellation/cache_record_data/users_visible_new_satellite_per_timeslot.json", 'r') as json_file:
+        users_visible_new_satellite_per_timeslot = json.load(json_file)
+
+    print("\t\t\033[31mfinish(01) : users_visible_new_satellite_per_timeslot load from D:/Pyproject/StarPerf_Simulator/data/XML_constellation/cache_record_data/users_visible_new_satellite_per_timeslot.json success\033[0m")
+
     # 下面要加入每个卫星与地面基站的能耗考虑
     # 可以每个直接获取下一时刻的用户内容，
-
-    ## 要不要在这里开始用t来做，visible_sattilates_in_all_shells_and_time已经把需要用的卫星都记录下来了
-    ## 注意卫星的结构问题：最底层的卫星经纬度是已经包含了所有时间戳的列表
-    ## visible_sattilates_in_all_shells_and_time shell 下面就马上到了时间戳层
-    ## 每个卫星类中只记录存储空间最大容量与最大能耗值
-
-    ## 具体的存储内容在外卖用一个cache content类去维护，在外面把用时间戳把每一个不一样的奇奇怪怪的结构统一起来
-    ## 每个时间戳有个缓存内容，也包含了能耗  吧
-    cache_content_in_timeslot = [] 
-
-
+    ############# 进入之前，用户得选一个卫星为其提供服务！！！！
+    
+    for i in range(time_len): # 进行时间循环去跑每一时刻，卫星的缓存内容，相当于在外面再做一层循环，但是不同的算法得用不同的实体，那就直接备份新的卫星列表
+        pass
+        # 当前时间戳更新可见的
     print("end test")
 
 ## 每个卫星除了轨迹位置，还需要缓存信息，加在satellite的entity中  OK
