@@ -16,6 +16,8 @@ import src.XML_cache_constellation.constellation_entity.shell as shell
 import src.XML_cache_constellation.cache_constellation_generation.orbit_configuration as orbit_configuration
 import xml.etree.ElementTree as ET
 import src.XML_cache_constellation.constellation_entity.constellation as CONSTELLATION
+from tqdm import tqdm
+import time
 
 
 def xml_to_dict(element):
@@ -105,25 +107,25 @@ def constellation_configuration(dT , constellation_name):
         shells.append(sh)
         # write the longitude, latitude, altitude and other location information of all satellites in the current
         # shell layer sh into a file and save it
-        for tt in range(1 , (int)(sh.orbit_cycle / dT)+2 , 1):
-            # this list is used to store the position information of all satellites in the current shell. It is a
-            # two-dimensional list. Each element is a one-dimensional list. Each one-dimensional list contains three
-            # elements, which respectively represent the longitude, latitude and altitude of a satellite.
-            satellite_position = []
-            for orbit in sh.orbits:
-                for sat in orbit.satellites:
-                    satellite_position.append([str(sat.longitude[tt-1]) , str(sat.latitude[tt-1]) , str(sat.altitude[tt-1])])
-            with h5py.File(file_path, 'a') as file:
-                # access the existing first-level subgroup position group
-                position = file['position']
-                # access the existing secondary subgroup 'shell'+str(count) subgroup
-                current_shell_group = position['shell' + str(count)]
-                # create a new dataset in the current_shell_group subgroup
+        # for tt in tqdm(range(1 , (int)(sh.orbit_cycle / dT)+2 , 1)):
+        #     # this list is used to store the position information of all satellites in the current shell. It is a
+        #     # two-dimensional list. Each element is a one-dimensional list. Each one-dimensional list contains three
+        #     # elements, which respectively represent the longitude, latitude and altitude of a satellite.
+        #     satellite_position = []
+        #     for orbit in sh.orbits:
+        #         for sat in orbit.satellites:
+        #             satellite_position.append([str(sat.longitude[tt-1]) , str(sat.latitude[tt-1]) , str(sat.altitude[tt-1])])
+        #     with h5py.File(file_path, 'a') as file:
+        #         # access the existing first-level subgroup position group
+        #         position = file['position']
+        #         # access the existing secondary subgroup 'shell'+str(count) subgroup
+        #         current_shell_group = position['shell' + str(count)]
+        #         # create a new dataset in the current_shell_group subgroup
 
 
-                ## 这个地方写入了所有卫星的timeslot，对应的经纬度和位置，存入.h5，直接再拿入，这里是一个时间一个data，shell下面就直接是timeslot
-                ## satellite_position 里面就有轨道信息了
-                current_shell_group.create_dataset('timeslot' + str(tt) , data = satellite_position)
+        #         ## 这个地方写入了所有卫星的timeslot，对应的经纬度和位置，存入.h5，直接再拿入，这里是一个时间一个data，shell下面就直接是timeslot
+        #         ## satellite_position 里面就有轨道信息了
+        #         current_shell_group.create_dataset('timeslot' + str(tt) , data = satellite_position)
     # all shells, orbits, and satellites have been initialized, and the target constellation is generated and returned.
     target_constellation = CONSTELLATION.constellation(constellation_name=constellation_name, number_of_shells=
                                 number_of_shells, shells=shells)

@@ -13,7 +13,7 @@ Function : This file defines the user terminal class, the source endpoint and de
 
 import random
 from .content import Request, Video, generate_requests_set_for_per_user
-
+from tqdm import tqdm
 
 class user:
     def __init__(self , longitude, latitude , user_name = None, user_request = None): 
@@ -28,7 +28,7 @@ def generate_users(num_users=10, user_position_range = [60,52,70,62], time_len =
                                                      time_len=time_len, 
                                                      video_list=video_list)  
     users = []
-    for i in range(num_users):
+    for i in tqdm(range(num_users)):
         # Generate random longitude and latitude within a reasonable range
         # Here we assume the range is between -180 to 180 for longitude and -90 to 90 for latitude
         longitude = random.uniform(user_position_range[0], user_position_range[2])

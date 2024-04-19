@@ -16,8 +16,7 @@ import numpy as np
 import pandas as pd
 import src.XML_cache_constellation.constellation_entity.orbit as ORBIT
 import src.XML_cache_constellation.constellation_entity.satellite as SATELLITE
-
-
+from tqdm import tqdm
 
 # Parameters:
 # sh : the shell class object of the orbit to be generated
@@ -53,7 +52,7 @@ def orbit_configuration(sh , dT):
     sat_per_orbit = sh.number_of_satellite_per_orbit  # number of satellites per orbit
     num_of_sat = num_of_orbit * sat_per_orbit  # total number of satellites
     F = 1
-    for i in range(1 , sh.number_of_orbits+1, 1):
+    for i in tqdm(range(1 , sh.number_of_orbits+1, 1)):
         orbit = ORBIT.orbit(a=a, ecc=ecc, inc=inc, raan=raan[i - 1], argp = argp)
         for j in range(1 , sh.number_of_satellite_per_orbit+1 , 1):
             # generate each satellite here... After generating the satellite, add each satellite to the satellites

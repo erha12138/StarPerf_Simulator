@@ -2,6 +2,7 @@ import xml.etree.ElementTree as ET
 import src.XML_cache_constellation.constellation_entity.ground_station as GS
 # from src.XML_cache_constellation.constellation_entity.user import user, generate_users
 import math
+from tqdm import tqdm
 
 # The Tile class is a class used to represent a certain area on the earth's surface. The area is represented by four latitude and longitude coordinates.
 # Tile类是用来表示地球表面某个区域的类。 该区域由四个纬度和经度坐标表示
@@ -212,7 +213,7 @@ def get_current_coverage_from_shell(tt, sh, ground_station_file, users, minimum_
     # define a list to represent the constellation coverage of each timeslot
     # 什么时候、并且是哪几号卫星，覆盖到这个区域
     coverage_all_timeslot = []
-    for t in range(0,tt,1):  # 对的上，就从0开始吧
+    for t in tqdm(range(0,tt,1)):  # 对的上，就从0开始吧
         coverage_current_timeslot = {"server_with_GS":[],"server_without_GS":[]}
 
         # define a list to represent the set of tiles that can be covered by the constellation at time t

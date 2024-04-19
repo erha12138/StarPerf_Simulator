@@ -13,3 +13,5 @@ starperf_env/
 __pycache__/
 
 __init__.py
+
+cache_record_data/
