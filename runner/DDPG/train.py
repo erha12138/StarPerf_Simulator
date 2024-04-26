@@ -46,7 +46,7 @@ class DDPGConfig:
         self.soft_tau = 1e-2 # 软更新参数
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def env_agent_config(cfg,seed=1):
+def env_agent_config(cfg,seed=1): # 要实现多环境
     env = NormalizedActions(gym.make(cfg.env)) 
     env.seed(seed) # 随机种子
     state_dim = env.observation_space.shape[0]
@@ -54,7 +54,7 @@ def env_agent_config(cfg,seed=1):
     agent = DDPG(state_dim,action_dim,cfg)
     return env,agent
 
-def train(cfg, env, agent):
+def train(cfg, env, agent): # 训练过程加入所有用户的考虑
     print('开始训练！')
     print(f'环境：{cfg.env}，算法：{cfg.algo}，设备：{cfg.device}')
     ou_noise = OUNoise(env.action_space)  # 动作噪声
