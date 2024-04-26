@@ -1,9 +1,8 @@
 # Environments
-.env
+
 .venv
-env/
+myenv/
 venv/
-ENV/
 env.bak/
 venv.bak/
 starperf_env/
