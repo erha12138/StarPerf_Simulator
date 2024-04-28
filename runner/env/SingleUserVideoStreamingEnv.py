@@ -20,12 +20,12 @@ class SingleUserVideoStreamingEnv(gym.Env):
         self.reset()
         
         # Define the action space to be the throughput and the observation space
-        # self.action_space = spaces.Box(low=0, high=max_throughput, shape=(1,), dtype=np.float32)
-        # self.observation_space = spaces.Box(
-        #     low=np.array([0, 0, -1, -1]), 
-        #     high=np.array([len(bitrate_list)-1, buffer_capacity, 1, 1]), 
-        #     dtype=np.float32
-        # )
+        self.action_space = spaces.Box(low=0, shape=(1,), dtype=np.float32)
+        self.observation_space = spaces.Box(
+            low=np.array([0, 0, -1, -1]), 
+            high=np.array([len(bitrate_list)-1, buffer_capacity, 1, 1]), 
+            dtype=np.float32
+        )
 
     def reset(self):
         # Reset the state to a initial state
