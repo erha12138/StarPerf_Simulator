@@ -1,22 +1,26 @@
 import gym
 import torch
 import numpy as np
+import random
 import threading
 import copy
 from torch.nn import functional as F
 from torch.optim import Adam
 from DDPG.agent import DDPG  # 假设已有DDPG智能体实现
-from env.SingleUserVideoStreamingEnv import SingleUserVideoStreamingEnv  # 环境正规化
+from env.SingleUserVideoStreamingEnv import SingleUserVideoStreamingEnv, OUNoise  # 环境正规化
 from collections import deque
 from torch import nn
 import statistics
 import datetime
 import sys,os
+import csv
 
 curr_path = os.path.dirname(os.path.abspath(__file__)) # 当前文件所在绝对路径
 parent_path = os.path.dirname(curr_path) # 父路径
 sys.path.append(parent_path) # 添加父路径到系统路径sys.path
 curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")  # 获取当前时间
+
+
 
 multi_record = {}
 record_lock = threading.Lock()
@@ -91,19 +95,24 @@ class GlobalNetwork(DDPG):
 
 class LocalAgent:  
     def __init__(self, global_network, env_name, cfg):
+        self.cfg = cfg
         self.env = SingleUserVideoStreamingEnv(gym.make(env_name)) # 这个name要是不一样,还可以self.env本身还可以不一样吗
         self.agent = copy.deepcopy(global_network) # 本地副本
         self.lock = threading.Lock()
-        # self.agent = DDPG(self.env.observation_space.shape[0], self.env.action_space.shape[0], cfg) # 给一个agent
-        ## 这里训练的都是self.agent,但同步的都是这个所谓的local_network,有问题!!!!!!!!!!
-        # self.global_network = global_network # 内部维护一个自己的global_network
-        # self.local_network = copy.deepcopy(global_network)  # 本地副本
+
         with record_lock:
             multi_record[str(self.env)] = {
                 "QoE": deque([0]*5, maxlen=5),
                 "power": deque([0]*5, maxlen=5),
                 "buffer": deque([0]*5, maxlen=5)
             }
+
+    def add_record_to_csv(self, filepath, data_dict):
+        with open(filepath, 'a', newline='') as file:  # 'a' 模式用于追加数据
+            writer = csv.DictWriter(file, fieldnames=data_dict.keys())
+            if file.tell() == 0:  # 检查文件是否为空，如果为空则写入表头
+                writer.writeheader()
+            writer.writerow(data_dict)
 
     def get_whole_state(self, state, QoE_all_user, power_all_user, buffer_change):
         QoE_state = [statistics.mean(QoE_all_user), statistics.variance(QoE_all_user)] # QoE特征
@@ -128,21 +137,69 @@ class LocalAgent:
                 - self.find_max_difference(power_all_user) \
                 - buffer_change
         return reward
+    
+    def get_throughput(self, action):
+        h = 1 # 模拟每个人都是1
+        bandwidth = 100 # 随便模拟一下，到时候再改
+        noise = 10 # 不知道靠不靠谱啊
+
+        other_power = []
+        with record_lock:
+            for env, info in multi_record.items(): # 开始迭代
+                if str(self.env) != env: # 说明不是自己的内容
+                    other_power.append(info["power"][-1])
+        
+        snr = h**2 * action / (sum(other_power) + noise) 
+
+        throughput = bandwidth * np.log2(1 + snr)
+                                
+        return throughput
+    
+    def get_global_reward(self, QoE_all_user, power_all_user):
+        average_QoE = np.mean(QoE_all_user)
+        max_difference = max(QoE_all_user) - min(QoE_all_user)
+        average_power = np.mean(power_all_user)
+        return average_QoE - max_difference - average_power
+
 # TODO: 
 # 0、将multi_record的锁机制考虑好 OK
 # 1、再考虑state，state除了env提供还需要外面的其他线程中智能体的信息 OK
 # 2、reward需要考虑 OK
-# 3、详细修改训练过程 ing
-# 4  每时刻计算全局reward, 来验证效果  
+# 3、详细修改训练过程 OK
+# 4  每时刻计算全局reward, 来验证效果，然后记录每一个单步reward，用csv的格式 OK
     def run(self):
         """运行一个完整的episode，同步参数，并更新全局网络""" 
+
+        print('开始训练！')
+        print(f'环境：{self.cfg.env}，算法：{self.cfg.algo}，设备：{self.cfg.device}')
+        
+        data_to_record = {
+            "global_reward": 0,
+            "step_reward": 0,
+            "QoE": 0,
+            "buffer_size": 0,
+            "rebuffer_event": 0,
+            "rate_switch_event": 0,
+            "bitrate": 0
+            }
+
+        ou_noise = OUNoise(env.action_space)  # 动作噪声
+        rewards = [] # 记录奖励
+        ma_rewards = []  # 记录滑动平均奖励
+
         state = self.env.reset()
         state = self.get_whole_state(state)
+        ou_noise.reset()
         total_reward = 0
         done = False
+        i_step = 0
         while not done:
-            action = self.agent.choose_action(state)
-            next_state, QoE, done, _ = self.env.step(action) 
+            i_step += 1
+            action = self.agent.choose_action(state)  # action是分配功率，但环境中的是吞吐量,其中差了一NOMA的香农公式
+            action = ou_noise.get_action(action, i_step)  
+
+            throughput = self.get_throughput(action) # 转化为吞吐量
+            next_state, QoE, done, _ = self.env.step(throughput) 
             # 在get_whole_state之前修改好其中内容
 
             QoE_all_user = []
@@ -163,14 +220,25 @@ class LocalAgent:
             next_state = self.get_whole_state(next_state, QoE_all_user, power_all_user, buffer_change)
             reward = self.get_new_reward(QoE, action, QoE_all_user, buffer_change, power_all_user)
 
+            global_reward = self.get_global_reward(QoE_all_user, power_all_user)
+
             self.agent.memory.push(state, action, reward, next_state, done)
 
             with self.lock:
                 self.agent.update()
             state = next_state
             total_reward += reward 
-
-
+            
+            # 记录数据
+            data_to_record["global_reward"] = global_reward
+            data_to_record["step_reward"] = reward
+            data_to_record["QoE"] = QoE
+            data_to_record["buffer_size"] = next_state[1]
+            data_to_record["rebuffer_event"] = next_state[2]
+            data_to_record["rate_switch_event"] = next_state[3]
+            data_to_record["bitrate"] = next_state[0]
+            self.add_record_to_csv(self.cfg.result_path+str(self.env)+".csv", data_to_record)
+        
         # 执行到这里就是一个视频已经看完
         # 可以把这个全局记录池中的信息删掉了
         with record_lock:
@@ -185,38 +253,56 @@ class LocalAgent:
 
 def main():
 
-    episode_now = 0 # 计数
-
-    num_agents = 5 # 同时开多少个来练，少了再加，写个简单的逻辑来加
-    env_name = 'Pendulum-v0'
+    episode_now = 0
+    num_agents = 5
     cfg = DDPGConfig()  # 假设已定义配置
 
-    global_network = GlobalNetwork(cfg.state_dim, cfg.action_dim, cfg) # global 网络初始化
-    agents = [LocalAgent(global_network, env_name, cfg) for _ in range(num_agents)] # 每次name可以不一样
+    global_network = GlobalNetwork(cfg.state_dim, cfg.action_dim, cfg)
+    agents = [LocalAgent(global_network, cfg.env, cfg) for _ in range(num_agents)]
+
+    episode_lock = threading.Lock()
+    agents_lock = threading.Lock()
+
+    def manage_agents():
+        global episode_now
+        while episode_now < 300:
+            with agents_lock:
+                current_agents_count = len(agents)
+                if current_agents_count < 20:
+                    new_agents_needed = max(5 - current_agents_count, 0)
+                    new_agent = random.randint(new_agents_needed, 5)
+                    for _ in range(new_agents_needed):
+                        new_agent = LocalAgent(global_network, cfg.env, cfg)
+                        agents.append(new_agent)
+                        t = threading.Thread(target=train_agent, args=(new_agent,))
+                        t.start()
 
     def train_agent(agent):
-        while True:
-            agent.run()
-            if True: # 这个agent执行完了
-                global_network.update_from_locals(agents)     # 更新全局网络,用当前所有的网络
-                global_network.sync_with_global(agents)       # 将新的全局网络更新至当前每个local
-                break
-        agents.remove(agent) # 从列表里删除此agent
+        global episode_now
+        agent.run()   
+        
+        # 执行训练完了
+        with agents_lock:
+            agents.remove(agent)
 
-        with change_agent_lock:
+        with episode_lock:
             episode_now += 1
-            # 计数
-            # 增加用户智能体
+            if episode_now >= 300:
+                return  # 停止添加更多agents
 
-    
-    threads = []
-    for agent in agents:
-        t = threading.Thread(target=train_agent, args=(agent,))
-        t.start()
-        threads.append(t)
+        with agents_lock:
+            global_network.update_from_locals(agents)     # 更新全局网络
+            global_network.sync_with_global(agents)       # 更新每个local至新的全局网络
 
-    for t in threads:
-        t.join()  # 等待所有线程完成
+            # 记录 global_network 的网络参数
+            global_network.save(cfg.model_path)
+
+
+    # 启动管理器线程
+    manager_thread = threading.Thread(target=manage_agents)
+    manager_thread.start()
+
+    manager_thread.join()  # 等待管理器线程完成
 
 if __name__ == "__main__":
     main()

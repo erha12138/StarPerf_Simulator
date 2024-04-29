@@ -1,18 +1,15 @@
-class Parent:
-    def __init__(self, parent_attr):
-        self.parent_attr = parent_attr
+import csv
 
-class Child(Parent):
-    def __init__(self, parent_attr, child_attr):
-        super().__init__(parent_attr)  # 显式调用父类的__init__方法
-        self.child_attr = child_attr
-        print(self.parent_attr)
+def add_record_to_csv(filepath, data_dict):
+    with open(filepath, 'a', newline='') as file:  # 'a' 模式用于追加数据
+        writer = csv.DictWriter(file, fieldnames=data_dict.keys())
+        if file.tell() == 0:  # 检查文件是否为空，如果为空则写入表头
+            writer.writeheader()
+        writer.writerow(data_dict)
 
-class Child2(Parent):
-    def __init__(self, child_attr):
-        super().__init__()  # 显式调用父类的__init__方法
-        self.child_attr = child_attr
-        print(self.parent_attr)
+# 使用示例
+data1 = {'name': 'Alice', 'age': 30, 'city': 'New York'}
+data2 = {'name': 'Alice2', 'age': 32, 'city': 'New York'}
+add_record_to_csv('data.csv', data1)
+add_record_to_csv('data.csv', data2)
 
-Child = Child(6,3)
-Child2 = Child2(1)
