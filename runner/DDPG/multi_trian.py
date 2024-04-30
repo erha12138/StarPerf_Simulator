@@ -1,3 +1,10 @@
+import sys,os
+module_path = 'D:\\Pyproject\\StarPerf_Simulator\\runner'
+if module_path not in sys.path:
+    sys.path.append(module_path)
+print(sys.path)
+
+
 import gym
 import torch
 import numpy as np
@@ -12,7 +19,7 @@ from collections import deque
 from torch import nn
 import statistics
 import datetime
-import sys,os
+
 import csv
 
 curr_path = os.path.dirname(os.path.abspath(__file__)) # 当前文件所在绝对路径
@@ -25,6 +32,9 @@ curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")  # 获取当前时
 multi_record = {}
 record_lock = threading.Lock()
 change_agent_lock = threading.Lock()
+
+bitrate_list = [640,1600,2400,4000,6000,8400]
+buffer_capacity = 20
 
 class DDPGConfig:
     def __init__(self):
@@ -47,11 +57,11 @@ class DDPGConfig:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def env_agent_config(cfg, seed=1): 
-    env = SingleUserVideoStreamingEnv(gym.make(cfg.env)) 
-    env.seed(seed) # 随机种子
+    env = SingleUserVideoStreamingEnv(bitrate_list=bitrate_list,buffer_capacity=buffer_capacity) 
+    # env.seed(seed) # 随机种子
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
-    agent = DDPG(state_dim,action_dim,cfg)
+    agent = GlobalNetwork(state_dim,action_dim, cfg)
     return env,agent
 
 class GlobalNetwork(DDPG):
@@ -94,14 +104,16 @@ class GlobalNetwork(DDPG):
             self.target_critic.load_state_dict(global_target_critic_dict)
 
 class LocalAgent:  
-    def __init__(self, global_network, env_name, cfg):
+    def __init__(self, global_network, env_id, cfg):
         self.cfg = cfg
-        self.env = SingleUserVideoStreamingEnv(gym.make(env_name)) # 这个name要是不一样,还可以self.env本身还可以不一样吗
+        self.env = SingleUserVideoStreamingEnv(bitrate_list=bitrate_list,buffer_capacity=buffer_capacity) # 这个name要是不一样,还可以self.env本身还可以不一样吗
         self.agent = copy.deepcopy(global_network) # 本地副本
         self.lock = threading.Lock()
+        self.env_id = env_id
+        print(self.env_id) # 看看是不是不一样
 
         with record_lock:
-            multi_record[str(self.env)] = {
+            multi_record[self.env_id] = {
                 "QoE": deque([0]*5, maxlen=5),
                 "power": deque([0]*5, maxlen=5),
                 "buffer": deque([0]*5, maxlen=5)
@@ -146,7 +158,7 @@ class LocalAgent:
         other_power = []
         with record_lock:
             for env, info in multi_record.items(): # 开始迭代
-                if str(self.env) != env: # 说明不是自己的内容
+                if self.env_id != env: # 说明不是自己的内容
                     other_power.append(info["power"][-1])
         
         snr = h**2 * action / (sum(other_power) + noise) 
@@ -184,8 +196,6 @@ class LocalAgent:
             }
 
         ou_noise = OUNoise(env.action_space)  # 动作噪声
-        rewards = [] # 记录奖励
-        ma_rewards = []  # 记录滑动平均奖励
 
         state = self.env.reset()
         state = self.get_whole_state(state)
@@ -205,15 +215,15 @@ class LocalAgent:
             QoE_all_user = []
             power_all_user = []
             with record_lock:
-                multi_record[str(self.env)]["QoE"].append(QoE)
-                multi_record[str(self.env)]["power"].append(action)
-                multi_record[str(self.env)]["buffer"].append(next_state[1])  # 假设next_state[1]是buffer长度
+                multi_record[self.env_id]["QoE"].append(QoE)
+                multi_record[self.env_id]["power"].append(action)
+                multi_record[self.env_id]["buffer"].append(next_state[1])  # 假设next_state[1]是buffer长度
                 
                 for env, info in multi_record.items(): # 开始迭代
                     QoE_all_user.append(info["QoE"][-1])  # 拿到所有人最新的QoE信息
                     power_all_user.append(info["power"][-1]) # 拿到所有人最新的power，决策
 
-                if str(self.env) == env: # 说明是自己的内容
+                if self.env_id == env: # 说明是自己的内容
                     buffer_change = info["buffer"][-1] - info["buffer"][-2]
             ## next state 与 reward 都需要修改
 
@@ -237,13 +247,13 @@ class LocalAgent:
             data_to_record["rebuffer_event"] = next_state[2]
             data_to_record["rate_switch_event"] = next_state[3]
             data_to_record["bitrate"] = next_state[0]
-            self.add_record_to_csv(self.cfg.result_path+str(self.env)+".csv", data_to_record)
+            self.add_record_to_csv(self.cfg.result_path+self.env_id+".csv", data_to_record)
         
         # 执行到这里就是一个视频已经看完
         # 可以把这个全局记录池中的信息删掉了
         with record_lock:
-            if str(self.env) in multi_record:
-                del multi_record[str(self.env)]
+            if self.env_id in multi_record:
+                del multi_record[self.env_id]
 
         # # 同步全局网络
         # self.global_network.sync_with_global(self.local_network)
@@ -251,28 +261,39 @@ class LocalAgent:
         # self.local_network.sync_with_global(self.global_network)
         return total_reward
 
-def main():
+# def main():
 
+
+
+if __name__ == "__main__":
     episode_now = 0
-    num_agents = 5
-    cfg = DDPGConfig()  # 假设已定义配置
+    num_agents = 1
 
-    global_network = GlobalNetwork(cfg.state_dim, cfg.action_dim, cfg)
-    agents = [LocalAgent(global_network, cfg.env, cfg) for _ in range(num_agents)]
+    cfg = DDPGConfig()  # 假设已定义配置
+    global_network, _ = env_agent_config(cfg)
+    # global_network = GlobalNetwork(cfg.state_dim, cfg.action_dim, cfg)
+    agents = [LocalAgent(global_network, i, cfg) for i in range(num_agents)]
+    # agents = []
 
     episode_lock = threading.Lock()
     agents_lock = threading.Lock()
 
     def manage_agents():
         global episode_now
+
+        if episode_now == 0: # 第一次进入循环
+            for current_agent in agents:
+                t = threading.Thread(target=train_agent, args=(current_agent,))
+                t.start()
+
         while episode_now < 300:
             with agents_lock:
                 current_agents_count = len(agents)
                 if current_agents_count < 20:
                     new_agents_needed = max(5 - current_agents_count, 0)
-                    new_agent = random.randint(new_agents_needed, 5)
+                    new_agent = random.randint(new_agents_needed, 5)  # 一直在这死循环啊，没道理
                     for _ in range(new_agents_needed):
-                        new_agent = LocalAgent(global_network, cfg.env, cfg)
+                        new_agent = LocalAgent(global_network, episode_now, cfg)
                         agents.append(new_agent)
                         t = threading.Thread(target=train_agent, args=(new_agent,))
                         t.start()
@@ -303,6 +324,3 @@ def main():
     manager_thread.start()
 
     manager_thread.join()  # 等待管理器线程完成
-
-if __name__ == "__main__":
-    main()

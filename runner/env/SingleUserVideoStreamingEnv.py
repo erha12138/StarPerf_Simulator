@@ -20,7 +20,7 @@ class SingleUserVideoStreamingEnv(gym.Env):
         self.reset()
         
         # Define the action space to be the throughput and the observation space
-        self.action_space = spaces.Box(low=0, shape=(1,), dtype=np.float32)
+        self.action_space = spaces.Box(low=0, high=20000, shape=(1,), dtype=np.float32)
         self.observation_space = spaces.Box(
             low=np.array([0, 0, -1, -1]), 
             high=np.array([len(bitrate_list)-1, buffer_capacity, 1, 1]), 
@@ -73,6 +73,7 @@ class SingleUserVideoStreamingEnv(gym.Env):
         
         # Return the next state, reward, done and extra info
         next_state = np.array([self.bitrate_list.index(self.next_bitrate), self.buffer_size, self.rebuffer_event, self.rate_switch_event])
+        print("now time slot:", self.video_timeslot)
         return next_state, reward, done, {}
 
     # def abr_decision(self, throughput):
