@@ -1,5 +1,7 @@
 import sys,os
-module_path = 'D:\\Pyproject\\StarPerf_Simulator\\runner'
+# module_path = 'D:\\Pyproject\\StarPerf_Simulator\\runner'
+module_path = '/home/debian/StarPerf_Simulator/runner' # linux
+
 if module_path not in sys.path:
     sys.path.append(module_path)
 print(sys.path)
@@ -32,8 +34,9 @@ curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")  # 获取当前时
 multi_record = {}
 record_lock = threading.Lock()
 change_agent_lock = threading.Lock()
+global_lock = threading.Lock()
 
-bitrate_list = [640,1600,2400,4000,6000,8400]
+bitrate_list = [640,1570,2400,4000,6000,8400] 
 buffer_capacity = 20
 
 class DDPGConfig:
@@ -44,6 +47,8 @@ class DDPGConfig:
             '/'+curr_time+'/results/'  # 保存结果的路径
         self.model_path = curr_path+"/outputs/" + self.env + \
             '/'+curr_time+'/models/'  # 保存模型的路径 我只保存 global 的 模型
+        self.state_path = curr_path+"/outputs/" + self.env + \
+            '/'+curr_time+'/state/'
         self.train_eps = 300 # 训练的回合数
         self.eval_eps = 50 # 测试的回合数
         self.gamma = 0.99 # 折扣因子
@@ -59,8 +64,8 @@ class DDPGConfig:
 def env_agent_config(cfg, seed=1): 
     env = SingleUserVideoStreamingEnv(bitrate_list=bitrate_list,buffer_capacity=buffer_capacity) 
     # env.seed(seed) # 随机种子
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
+    state_dim = env.observation_space.shape[0] # 应该是9个维度
+    action_dim = env.action_space.shape[0]  # 就是一个维度没有问题
     agent = GlobalNetwork(state_dim,action_dim, cfg)
     return env,agent
 
@@ -68,11 +73,11 @@ class GlobalNetwork(DDPG):
     def __init__(self, state_dim, action_dim, cfg):
         super().__init__(state_dim=state_dim, action_dim=action_dim, cfg=cfg) # 网络结构直接完全继承DDPG的结构
         # 定义全局网络结构，此处简化实现,直接继承DDPG
-        self.lock = threading.Lock()
+        # self.lock = threading.Lock()
 
     def sync_with_global(self, local_networks):
         """将全局网络参数同步到本地网络"""
-        with self.lock:
+        with global_lock:
             for local_network in local_networks:
                 with local_network.lock:
                     local_network.agent.actor.load_state_dict(self.actor.state_dict())
@@ -82,7 +87,7 @@ class GlobalNetwork(DDPG):
 
     def update_from_locals(self, local_networks):
         """从所有本地网络收集参数更新全局网络"""
-        with self.lock:
+        with global_lock:
             # 取平均更新
             global_actor_dict = self.actor.state_dict()
             global_critic_dict = self.critic.state_dict()
@@ -104,12 +109,13 @@ class GlobalNetwork(DDPG):
             self.target_critic.load_state_dict(global_target_critic_dict)
 
 class LocalAgent:  
-    def __init__(self, global_network, env_id, cfg):
-        self.cfg = cfg
+    def __init__(self, global_network, env_id, cfg, h):
         self.env = SingleUserVideoStreamingEnv(bitrate_list=bitrate_list,buffer_capacity=buffer_capacity) # 这个name要是不一样,还可以self.env本身还可以不一样吗
+        self.cfg = cfg
         self.agent = copy.deepcopy(global_network) # 本地副本
         self.lock = threading.Lock()
         self.env_id = env_id
+        self.h = h # 信道增益
         print(self.env_id) # 看看是不是不一样
 
         with record_lock:
@@ -127,13 +133,20 @@ class LocalAgent:
             writer.writerow(data_dict)
 
     def get_whole_state(self, state, QoE_all_user, power_all_user, buffer_change):
-        QoE_state = [statistics.mean(QoE_all_user), statistics.variance(QoE_all_user)] # QoE特征
-        power_state = [statistics.mean(power_all_user), statistics.variance(power_all_user)]
-        state.insert(0, QoE_state)
-        state.insert(1, power_state)
-        state.insert(2, buffer_change)
 
-        return np.array(state)
+        if len(QoE_all_user) == 1:
+            QoE_state = [QoE_all_user, 400] # 需要再考虑考虑，具体的量级设计
+            power_state = [power_all_user, 400]
+        elif len(QoE_all_user) == 0:
+            QoE_state = [0, 400] # 需要再考虑考虑，具体的量级设计
+            power_state = [0, 400]
+        else:
+            QoE_state = [statistics.mean(QoE_all_user), statistics.variance(QoE_all_user)] # QoE特征
+            power_state = [statistics.mean(power_all_user), statistics.variance(power_all_user)]
+            state = np.insert(state, 0, QoE_state)
+            state = np.insert(state, 1, power_state)
+            state = np.insert(state, 2, buffer_change)
+        return state
     
     def find_max_difference(self, lst):
         if len(lst) < 2:  # 如果列表中的元素少于两个，则无法计算差值
@@ -144,15 +157,18 @@ class LocalAgent:
     
     def get_new_reward(self, QoE, power, QoE_all_user, buffer_change, power_all_user):
         reward = QoE \
-                - self.find_max_difference(QoE_all_user) \
-                - power \
-                - self.find_max_difference(power_all_user) \
-                - buffer_change
+                - 1 * self.find_max_difference(QoE_all_user) \
+                - 1 * power \
+                - 4 * self.find_max_difference(power_all_user) \
+                - 1.5 * buffer_change
+        # 每一项的相对大小
+        # print(QoE, self.find_max_difference(QoE_all_user), power, self.find_max_difference(power_all_user), buffer_change)
+        print("power action: ", power)
         return reward
     
     def get_throughput(self, action):
-        h = 1 # 模拟每个人都是1
-        bandwidth = 100 # 随便模拟一下，到时候再改
+        h = self.h # 模拟每个人有随机性
+        bandwidth = 50 # 随便模拟一下，到时候再改，再调再调
         noise = 10 # 不知道靠不靠谱啊
 
         other_power = []
@@ -165,7 +181,7 @@ class LocalAgent:
 
         throughput = bandwidth * np.log2(1 + snr)
                                 
-        return throughput
+        return throughput * 1850 # 直接计算出的大概在个位数，乘1000，差不多是正常吞吐量
     
     def get_global_reward(self, QoE_all_user, power_all_user):
         average_QoE = np.mean(QoE_all_user)
@@ -195,28 +211,32 @@ class LocalAgent:
             "bitrate": 0
             }
 
-        ou_noise = OUNoise(env.action_space)  # 动作噪声
+        ou_noise = OUNoise(self.env.action_space)  # 动作噪声
 
         state = self.env.reset()
-        state = self.get_whole_state(state)
+        # state_list = state.tolist()
+        state = self.get_whole_state(state, [0, 0, 0], [0, 0, 0], 0) # 目前 state是9个维度
         ou_noise.reset()
         total_reward = 0
         done = False
         i_step = 0
         while not done:
             i_step += 1
-            action = self.agent.choose_action(state)  # action是分配功率，但环境中的是吞吐量,其中差了一NOMA的香农公式
+            with self.lock:
+                action = self.agent.choose_action(state)  # action是分配功率，但环境中的是吞吐量,其中差了一NOMA的香农公式
+            
             action = ou_noise.get_action(action, i_step)  
+            action_value = action[0]
 
-            throughput = self.get_throughput(action) # 转化为吞吐量
+            throughput = self.get_throughput(action_value) # 转化为吞吐量
             next_state, QoE, done, _ = self.env.step(throughput) 
             # 在get_whole_state之前修改好其中内容
-
             QoE_all_user = []
             power_all_user = []
+            buffer_change = 0
             with record_lock:
-                multi_record[self.env_id]["QoE"].append(QoE)
-                multi_record[self.env_id]["power"].append(action)
+                multi_record[self.env_id]["QoE"].append(QoE)  # 都不是array，都是value
+                multi_record[self.env_id]["power"].append(action_value)
                 multi_record[self.env_id]["buffer"].append(next_state[1])  # 假设next_state[1]是buffer长度
                 
                 for env, info in multi_record.items(): # 开始迭代
@@ -225,8 +245,7 @@ class LocalAgent:
 
                 if self.env_id == env: # 说明是自己的内容
                     buffer_change = info["buffer"][-1] - info["buffer"][-2]
-            ## next state 与 reward 都需要修改
-
+            ## next_state 直接用列表
             next_state = self.get_whole_state(next_state, QoE_all_user, power_all_user, buffer_change)
             reward = self.get_new_reward(QoE, action, QoE_all_user, buffer_change, power_all_user)
 
@@ -234,20 +253,40 @@ class LocalAgent:
 
             self.agent.memory.push(state, action, reward, next_state, done)
 
-            with self.lock:
+            with self.lock: ## 为什么？？？
                 self.agent.update()
-            state = next_state
+            state = next_state # next_state 也就是 数组
             total_reward += reward 
             
             # 记录数据
+            data_state = {}
+            os.makedirs(self.cfg.state_path, exist_ok=True)
+            data_state["power"] = action_value
+            data_state["power_all_user"] = power_all_user
+            data_state["throughput"] = throughput
+            data_state["QoE_all_user"] = QoE_all_user
+            data_state["state0: mean QoE"] = state[0]
+            data_state["state1: variance QoE"] = state[1]
+            data_state["state2: mean power"] = state[2]            
+            data_state["state3: variance power"] = state[3]            
+            data_state["state4: buffer_change"] = state[4]            
+            data_state["state5: bitrate level"] = state[5]
+            data_state["state6: buffer size"] = state[6]
+            data_state["state7: rebuffer event"] = state[7]
+            data_state["state8: rate_switch_event"] = state[8]
+            data_state["bitrate"] = bitrate_list[int(state[5])]
+
+            self.add_record_to_csv(self.cfg.state_path+str(self.env_id)+".csv", data_state)
+
+            os.makedirs(self.cfg.result_path, exist_ok=True)
             data_to_record["global_reward"] = global_reward
             data_to_record["step_reward"] = reward
             data_to_record["QoE"] = QoE
-            data_to_record["buffer_size"] = next_state[1]
-            data_to_record["rebuffer_event"] = next_state[2]
-            data_to_record["rate_switch_event"] = next_state[3]
-            data_to_record["bitrate"] = next_state[0]
-            self.add_record_to_csv(self.cfg.result_path+self.env_id+".csv", data_to_record)
+            data_to_record["buffer_size"] = next_state[6]
+            data_to_record["rebuffer_event"] = next_state[7]
+            data_to_record["rate_switch_event"] = next_state[8]
+            data_to_record["bitrate"] = next_state[5]
+            self.add_record_to_csv(self.cfg.result_path+str(self.env_id)+".csv", data_to_record)
         
         # 执行到这里就是一个视频已经看完
         # 可以把这个全局记录池中的信息删掉了
@@ -267,10 +306,14 @@ class LocalAgent:
 
 if __name__ == "__main__":
     episode_now = 0
-    num_agents = 1
+    num_agents = 20 # 先试试固定数量能不能练出来，把正常逻辑给写对先
+
+# TODO:
+# 1、先把state的值都记录一下，统一度量衡
+# 2、把文件目录已存在的问题解决一下 OK ，多线程竞态的问题，已解决
 
     cfg = DDPGConfig()  # 假设已定义配置
-    global_network, _ = env_agent_config(cfg)
+    _, global_network = env_agent_config(cfg)
     # global_network = GlobalNetwork(cfg.state_dim, cfg.action_dim, cfg)
     agents = [LocalAgent(global_network, i, cfg) for i in range(num_agents)]
     # agents = []
@@ -289,10 +332,14 @@ if __name__ == "__main__":
         while episode_now < 300:
             with agents_lock:
                 current_agents_count = len(agents)
-                if current_agents_count < 20:
+                if current_agents_count > 20:
+                    continue
+                if current_agents_count < 5:
                     new_agents_needed = max(5 - current_agents_count, 0)
-                    new_agent = random.randint(new_agents_needed, 5)  # 一直在这死循环啊，没道理
-                    for _ in range(new_agents_needed):
+                    new_agent = random.randint(new_agents_needed, 5)  
+                    print("\n num of new_agent:", new_agent)
+                    print("\n num of now_agent:", agents)
+                    for _ in range(new_agent):
                         new_agent = LocalAgent(global_network, episode_now, cfg)
                         agents.append(new_agent)
                         t = threading.Thread(target=train_agent, args=(new_agent,))

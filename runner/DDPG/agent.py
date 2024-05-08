@@ -13,9 +13,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
+import sys,os
 from common.model import Actor, Critic
 from common.memory import ReplayBuffer
+import datetime
 
 
 class DDPG:
@@ -51,7 +52,9 @@ class DDPG:
         # 从经验回放中(replay memory)中随机采样一个批量的转移(transition)
         state, action, reward, next_state, done = self.memory.sample(self.batch_size)
         # 转变为张量
-        state = torch.FloatTensor(state).to(self.device)
+        # print("state:", state)
+        # print("\n next_state", next_state)
+        state = torch.FloatTensor(np.array(state)).to(self.device)
         next_state = torch.FloatTensor(next_state).to(self.device)
         action = torch.FloatTensor(action).to(self.device)
         reward = torch.FloatTensor(reward).unsqueeze(1).to(self.device)
@@ -84,8 +87,16 @@ class DDPG:
                 target_param.data * (1.0 - self.soft_tau) +
                 param.data * self.soft_tau
             )
-    def save(self,path):
-        torch.save(self.actor.state_dict(), path+'checkpoint.pt')
+    def save(self, path):
+        curr_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")  # 获取当前时间
+        path = path + curr_time + '/'
+        if not os.path.exists(path):
+            # 获取文件所在目录
+            directory = os.path.dirname(path)
+            # 如果目录不存在，创建它
+            if not os.path.exists(directory):
+                os.makedirs(directory)        
+        torch.save(self.actor.state_dict(), path +'checkpoint.pt')
 
     def load(self,path):
         self.actor.load_state_dict(torch.load(path+'checkpoint.pt')) 

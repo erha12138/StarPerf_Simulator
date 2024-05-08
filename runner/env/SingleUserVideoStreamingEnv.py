@@ -16,14 +16,15 @@ class SingleUserVideoStreamingEnv(gym.Env):
         self.bitrate_list = bitrate_list  # Possible bitrates that can be requested
         self.buffer_capacity = buffer_capacity  # The buffer capacity in seconds
         self.chunk_duration = 4 # 4s
-        self.max_duration = 900 # 15min
+        self.max_duration = 4 * random.randint(1000, 2500) # 400s - 1000s
+        
         self.reset()
         
         # Define the action space to be the throughput and the observation space
-        self.action_space = spaces.Box(low=0, high=20000, shape=(1,), dtype=np.float32)
+        self.action_space = spaces.Box(low=0.40, high=2, shape=(1,), dtype=np.float32)
         self.observation_space = spaces.Box(
-            low=np.array([0, 0, -1, -1]), 
-            high=np.array([len(bitrate_list)-1, buffer_capacity, 1, 1]), 
+            low=np.array([0, 0, 0, 0, 0, 0, 0, -1, -1]),  # # qoe 的均值与方差，功率的均值与方差，buffer的差值；这个与环境本身关系不大，要在训练时重新计算，考虑是不是给个归一化？
+            high=np.array([1000, 1000, 1000, 1000, buffer_capacity, len(bitrate_list)-1, buffer_capacity, 1, 1]), 
             dtype=np.float32
         )
 
@@ -45,7 +46,7 @@ class SingleUserVideoStreamingEnv(gym.Env):
         self.rate_switch_event = False
 
         # Simulate one time step within the environment
-        throughput = action[0] # action 应该是吞吐量
+        throughput = action # action 应该是吞吐量
         
         # ABR logic to decide the next bitrate based on throughput and buffer size
         self.next_bitrate = self.abr_decision(throughput)
@@ -73,7 +74,7 @@ class SingleUserVideoStreamingEnv(gym.Env):
         
         # Return the next state, reward, done and extra info
         next_state = np.array([self.bitrate_list.index(self.next_bitrate), self.buffer_size, self.rebuffer_event, self.rate_switch_event])
-        print("now time slot:", self.video_timeslot)
+        # print("now time slot:", self.video_timeslot)
         return next_state, reward, done, {}
 
     # def abr_decision(self, throughput):
@@ -93,7 +94,7 @@ class SingleUserVideoStreamingEnv(gym.Env):
         # download_time = chunk_size_megabits / throughput if throughput > 0 else float('inf')
 
         # 计算每个码率的效用值
-        utility_list = [np.log(br) + V * (self.buffer_size - 2 + self.chunk_duration - (br*self.chunk_duration)/throughput) for br in self.bitrate_list]
+        utility_list = [np.log(br) + V * (self.buffer_size - 2 + self.chunk_duration - (br*self.chunk_duration)/throughput if throughput > 0 else float('inf')) for br in self.bitrate_list]
         
         # 选择最高效用值的码率，但吞吐量必须支持该码率
         next_bitrate = max((br for br, u in zip(self.bitrate_list, utility_list) if br <= throughput), 
@@ -136,14 +137,14 @@ class SingleUserVideoStreamingEnv(gym.Env):
         if next_bitrate != current_bitrate:
             self.rate_switch_event = True
         bitrate_change = abs(self.bitrate_list.index(next_bitrate) - self.bitrate_list.index(current_bitrate))
-        penalty = bitrate_change ** 2
+        penalty = bitrate_change
         return penalty
 
 
     def calculate_QoE(self, bitrate_switch_penalty):
         # Define and calculate the QoE based on bitrate, rebuffering, etc.
         # For simplicity, we can start with bitrate minus rebuffering penalties
-        qoe = self.bitrate_list.index(self.current_bitrate) ** 2
+        qoe = self.bitrate_list.index(self.current_bitrate) * 4 # 这个也是要改的
         if self.rebuffer_event:
             qoe -= 5  # Example penalty for rebuffering
         qoe -= bitrate_switch_penalty  # Subtract the bitrate switch penalty
